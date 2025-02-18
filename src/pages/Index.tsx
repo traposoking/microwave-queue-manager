@@ -3,6 +3,27 @@ import { useEffect, useState } from "react";
 import { QueueStatus } from "@/components/QueueStatus";
 import { QueueActions } from "@/components/QueueActions";
 import { QueueList } from "@/components/QueueList";
+import { db } from "@/lib/firebase";
+import { 
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  getDocs
+} from "firebase/firestore";
+
+const QUEUE_COLLECTION = 'queue';
+const CURRENT_NUMBER_DOC = 'currentNumber';
+
+interface QueueItem {
+  id: string;
+  number: number;
+  timestamp: number;
+}
 
 const Index = () => {
   const [currentNumber, setCurrentNumber] = useState(1);
@@ -10,8 +31,33 @@ const Index = () => {
   const [userNumber, setUserNumber] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
+  // Suscripción a cambios en la cola
   useEffect(() => {
-    // Comprobar si estamos en horario de servicio
+    const q = query(collection(db, QUEUE_COLLECTION), orderBy('timestamp'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const numbers = snapshot.docs.map(doc => {
+        const data = doc.data() as QueueItem;
+        return data.number;
+      });
+      setQueue(numbers);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Suscripción al número actual
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), (doc) => {
+      if (doc.exists()) {
+        setCurrentNumber(doc.data().number);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Comprobar horario de servicio
+  useEffect(() => {
     const checkServiceHours = () => {
       const now = new Date();
       const hours = now.getHours();
@@ -24,32 +70,70 @@ const Index = () => {
     };
 
     checkServiceHours();
-    const interval = setInterval(checkServiceHours, 60000); // Comprobar cada minuto
+    const interval = setInterval(checkServiceHours, 60000);
 
     return () => clearInterval(interval);
   }, []);
 
-  const handleJoinQueue = () => {
-    const nextNumber = queue.length > 0 ? Math.max(...queue) + 1 : 1;
-    setQueue([...queue, nextNumber]);
-    setUserNumber(nextNumber);
-  };
+  const handleJoinQueue = async () => {
+    try {
+      const queueSnapshot = await getDocs(collection(db, QUEUE_COLLECTION));
+      const numbers = queueSnapshot.docs.map(doc => {
+        const data = doc.data() as QueueItem;
+        return data.number;
+      });
+      
+      const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+      const newQueueItem: QueueItem = {
+        id: nextNumber.toString(),
+        number: nextNumber,
+        timestamp: Date.now()
+      };
 
-  const handleConfirm = () => {
-    if (userNumber === currentNumber) {
-      setQueue(queue.filter(n => n !== currentNumber));
-      setCurrentNumber(current => current + 1);
-      setUserNumber(null);
+      await setDoc(
+        doc(db, QUEUE_COLLECTION, nextNumber.toString()),
+        newQueueItem
+      );
+      
+      setUserNumber(nextNumber);
+    } catch (error) {
+      console.error("Error al unirse a la cola:", error);
     }
   };
 
-  const handleCancel = () => {
-    if (userNumber) {
-      setQueue(queue.filter(n => n !== userNumber));
-      if (userNumber === currentNumber) {
-        setCurrentNumber(current => current + 1);
+  const handleConfirm = async () => {
+    if (userNumber === currentNumber) {
+      try {
+        // Eliminar el turno actual
+        await deleteDoc(doc(db, QUEUE_COLLECTION, currentNumber.toString()));
+        
+        // Actualizar el número actual
+        await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
+          number: currentNumber + 1
+        });
+
+        setUserNumber(null);
+      } catch (error) {
+        console.error("Error al confirmar turno:", error);
       }
-      setUserNumber(null);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (userNumber) {
+      try {
+        await deleteDoc(doc(db, QUEUE_COLLECTION, userNumber.toString()));
+        
+        if (userNumber === currentNumber) {
+          await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
+            number: currentNumber + 1
+          });
+        }
+        
+        setUserNumber(null);
+      } catch (error) {
+        console.error("Error al cancelar turno:", error);
+      }
     }
   };
 
