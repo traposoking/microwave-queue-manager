@@ -19,7 +19,7 @@ export function QueueStatus({ currentNumber, queueLength, isOpen }: QueueStatusP
           El servicio está cerrado
         </h2>
         <p className="mt-2 text-gray-500">
-          Disponible de 13:30 a 15:00
+          Disponible de 9:00 a 22:00
         </p>
       </Card>
     );

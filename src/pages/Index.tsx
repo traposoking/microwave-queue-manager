@@ -17,8 +17,8 @@ const Index = () => {
       const hours = now.getHours();
       const minutes = now.getMinutes();
       const currentTime = hours * 60 + minutes;
-      const openTime = 13 * 60 + 30; // 13:30
-      const closeTime = 15 * 60; // 15:00
+      const openTime = 9 * 60; // 9:00
+      const closeTime = 22 * 60; // 22:00
       
       setIsOpen(currentTime >= openTime && currentTime < closeTime);
     };
