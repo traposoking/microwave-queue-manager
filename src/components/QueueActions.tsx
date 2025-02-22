@@ -1,6 +1,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
 interface QueueActionsProps {
@@ -10,6 +12,8 @@ interface QueueActionsProps {
   onConfirm: () => void;
   onCancel: () => void;
   isOpen: boolean;
+  userName: string;
+  onNameChange: (name: string) => void;
 }
 
 export function QueueActions({
@@ -19,6 +23,8 @@ export function QueueActions({
   onConfirm,
   onCancel,
   isOpen,
+  userName,
+  onNameChange,
 }: QueueActionsProps) {
   const { toast } = useToast();
 
@@ -52,7 +58,16 @@ export function QueueActions({
 
   if (!userNumber) {
     return (
-      <Card className="p-6 animate-slideUp">
+      <Card className="p-6 space-y-4 animate-slideUp">
+        <div className="space-y-2">
+          <Label htmlFor="name">Nombre</Label>
+          <Input
+            id="name"
+            placeholder="Introduce tu nombre"
+            value={userName}
+            onChange={(e) => onNameChange(e.target.value)}
+          />
+        </div>
         <Button
           onClick={handleJoin}
           className="w-full bg-mint-500 hover:bg-mint-600 text-white"

@@ -15,6 +15,9 @@ import {
   orderBy,
   getDocs
 } from "firebase/firestore";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 
 const QUEUE_COLLECTION = 'queue';
 const CURRENT_NUMBER_DOC = 'currentNumber';
@@ -23,29 +26,38 @@ interface QueueItem {
   id: string;
   number: number;
   timestamp: number;
+  name: string;
 }
 
 const Index = () => {
   const [currentNumber, setCurrentNumber] = useState(1);
-  const [queue, setQueue] = useState<number[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [userNumber, setUserNumber] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [userName, setUserName] = useState("");
+  const { toast } = useToast();
 
-  // Suscripción a cambios en la cola
   useEffect(() => {
     const q = query(collection(db, QUEUE_COLLECTION), orderBy('timestamp'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const numbers = snapshot.docs.map(doc => {
+      const queueItems = snapshot.docs.map(doc => {
         const data = doc.data() as QueueItem;
-        return data.number;
+        return data;
       });
-      setQueue(numbers);
+      setQueue(queueItems);
+      
+      // Si no hay usuarios en la cola y el último turno fue confirmado,
+      // actualizar el número actual al siguiente
+      if (queueItems.length === 0) {
+        setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
+          number: currentNumber + 1
+        });
+      }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentNumber]);
 
-  // Suscripción al número actual
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), (doc) => {
       if (doc.exists()) {
@@ -76,18 +88,22 @@ const Index = () => {
   }, []);
 
   const handleJoinQueue = async () => {
-    try {
-      const queueSnapshot = await getDocs(collection(db, QUEUE_COLLECTION));
-      const numbers = queueSnapshot.docs.map(doc => {
-        const data = doc.data() as QueueItem;
-        return data.number;
+    if (!userName.trim()) {
+      toast({
+        title: "Error",
+        description: "Por favor, introduce tu nombre",
+        variant: "destructive"
       });
-      
-      const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+      return;
+    }
+
+    try {
+      const nextNumber = queue.length > 0 ? Math.max(...queue.map(item => item.number)) + 1 : currentNumber;
       const newQueueItem: QueueItem = {
         id: nextNumber.toString(),
         number: nextNumber,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        name: userName.trim()
       };
 
       await setDoc(
@@ -96,6 +112,7 @@ const Index = () => {
       );
       
       setUserNumber(nextNumber);
+      setUserName("");
     } catch (error) {
       console.error("Error al unirse a la cola:", error);
     }
@@ -104,10 +121,8 @@ const Index = () => {
   const handleConfirm = async () => {
     if (userNumber === currentNumber) {
       try {
-        // Eliminar el turno actual
         await deleteDoc(doc(db, QUEUE_COLLECTION, currentNumber.toString()));
         
-        // Actualizar el número actual
         await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
           number: currentNumber + 1
         });
@@ -148,6 +163,7 @@ const Index = () => {
           currentNumber={currentNumber}
           queueLength={queue.length}
           isOpen={isOpen}
+          currentUser={queue.find(item => item.number === currentNumber)?.name}
         />
         
         <QueueActions
@@ -157,6 +173,8 @@ const Index = () => {
           onConfirm={handleConfirm}
           onCancel={handleCancel}
           isOpen={isOpen}
+          userName={userName}
+          onNameChange={setUserName}
         />
         
         {queue.length > 0 && (

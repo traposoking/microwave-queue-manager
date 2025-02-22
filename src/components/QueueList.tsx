@@ -1,8 +1,13 @@
 
 import { Card } from "@/components/ui/card";
 
+interface QueueItem {
+  number: number;
+  name: string;
+}
+
 interface QueueListProps {
-  queue: number[];
+  queue: QueueItem[];
   currentNumber: number;
   userNumber: number | null;
 }
@@ -20,22 +25,25 @@ export function QueueList({ queue, currentNumber, userNumber }: QueueListProps) 
     <Card className="p-6 space-y-4 animate-fadeIn">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Cola actual</h3>
       <div className="space-y-2">
-        {queue.map((number) => (
+        {queue.map((item) => (
           <div
-            key={number}
+            key={item.number}
             className={`p-4 rounded-lg border ${
-              number === currentNumber
+              item.number === currentNumber
                 ? "bg-mint-50 border-mint-200"
                 : "bg-white border-gray-100"
             } ${
-              number === userNumber
+              item.number === userNumber
                 ? "border-mint-300"
                 : ""
             }`}
           >
             <div className="flex justify-between items-center">
-              <span className="text-gray-900">Turno {number}</span>
-              {number === userNumber && (
+              <div>
+                <span className="text-gray-900">Turno {item.number}</span>
+                <p className="text-sm text-gray-500">{item.name}</p>
+              </div>
+              {item.number === userNumber && (
                 <span className="text-sm text-mint-600">Tú</span>
               )}
             </div>

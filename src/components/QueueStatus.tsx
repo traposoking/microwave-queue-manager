@@ -6,9 +6,10 @@ interface QueueStatusProps {
   currentNumber: number;
   queueLength: number;
   isOpen: boolean;
+  currentUser?: string;
 }
 
-export function QueueStatus({ currentNumber, queueLength, isOpen }: QueueStatusProps) {
+export function QueueStatus({ currentNumber, queueLength, isOpen, currentUser }: QueueStatusProps) {
   if (!isOpen) {
     return (
       <Card className="p-6 text-center animate-fadeIn bg-gray-50 border-gray-200">
@@ -33,6 +34,11 @@ export function QueueStatus({ currentNumber, queueLength, isOpen }: QueueStatusP
       <h2 className="text-3xl font-semibold text-gray-900 mb-2">
         Turno actual: {currentNumber}
       </h2>
+      {currentUser && (
+        <p className="text-lg text-gray-700 mb-2">
+          Usuario: {currentUser}
+        </p>
+      )}
       <p className="text-gray-500">
         {queueLength} {queueLength === 1 ? "persona" : "personas"} en espera
       </p>
