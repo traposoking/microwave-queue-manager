@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { QueueStatus } from "@/components/QueueStatus";
 import { QueueActions } from "@/components/QueueActions";
@@ -46,17 +45,6 @@ const Index = () => {
         return data;
       });
       setQueue(queueItems);
-      
-      // Si no hay usuarios en la cola, actualizar el número actual
-      if (queueItems.length === 0) {
-        const currentNumberDoc = await getDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC));
-        if (currentNumberDoc.exists()) {
-          const nextNumber = currentNumberDoc.data().number + 1;
-          await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
-            number: nextNumber
-          });
-        }
-      }
     });
 
     return () => unsubscribe();
@@ -72,7 +60,6 @@ const Index = () => {
     return () => unsubscribe();
   }, []);
 
-  // Comprobar horario de servicio
   useEffect(() => {
     const checkServiceHours = () => {
       const now = new Date();
@@ -138,11 +125,6 @@ const Index = () => {
         doc(db, QUEUE_COLLECTION, nextNumber.toString()),
         newQueueItem
       );
-
-      // Incrementar el número actual en Firebase
-      await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
-        number: nextNumber + 1
-      });
       
       // Si es el primer usuario
       if (queue.length === 0) {
@@ -190,6 +172,15 @@ const Index = () => {
 
     try {
       await deleteDoc(doc(db, QUEUE_COLLECTION, userNumber.toString()));
+      
+      // Incrementar el número actual solo cuando se confirma el uso
+      const currentNumberDoc = await getDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC));
+      if (currentNumberDoc.exists()) {
+        await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
+          number: currentNumberDoc.data().number + 1
+        });
+      }
+      
       setUserNumber(null);
       
       toast({
@@ -219,7 +210,7 @@ const Index = () => {
     try {
       await deleteDoc(doc(db, QUEUE_COLLECTION, userNumber.toString()));
       
-      // Si era el turno actual, incrementar el número
+      // Solo incrementar el número actual si era el turno actual
       if (userNumber === currentNumber) {
         const currentNumberDoc = await getDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC));
         if (currentNumberDoc.exists()) {
