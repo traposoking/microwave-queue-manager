@@ -13,7 +13,8 @@ import {
   deleteDoc,
   query,
   orderBy,
-  getDocs
+  getDocs,
+  getDoc
 } from "firebase/firestore";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,24 +40,27 @@ const Index = () => {
 
   useEffect(() => {
     const q = query(collection(db, QUEUE_COLLECTION), orderBy('timestamp'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const queueItems = snapshot.docs.map(doc => {
         const data = doc.data() as QueueItem;
         return data;
       });
       setQueue(queueItems);
       
-      // Si no hay usuarios en la cola y el último turno fue confirmado,
-      // actualizar el número actual al siguiente
+      // Si no hay usuarios en la cola, actualizar el número actual
       if (queueItems.length === 0) {
-        setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
-          number: currentNumber + 1
-        });
+        const currentNumberDoc = await getDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC));
+        if (currentNumberDoc.exists()) {
+          const nextNumber = currentNumberDoc.data().number + 1;
+          await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
+            number: nextNumber
+          });
+        }
       }
     });
 
     return () => unsubscribe();
-  }, [currentNumber]);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), (doc) => {
@@ -106,8 +110,23 @@ const Index = () => {
       return;
     }
 
+    if (!isOpen) {
+      toast({
+        title: "Error",
+        description: "El servicio está cerrado",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      const nextNumber = queue.length > 0 ? Math.max(...queue.map(item => item.number)) + 1 : currentNumber;
+      // Obtener el número actual de Firebase
+      const currentNumberDoc = await getDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC));
+      if (!currentNumberDoc.exists()) {
+        throw new Error("No se pudo obtener el número actual");
+      }
+
+      const nextNumber = currentNumberDoc.data().number;
       const newQueueItem: QueueItem = {
         id: nextNumber.toString(),
         number: nextNumber,
@@ -119,9 +138,14 @@ const Index = () => {
         doc(db, QUEUE_COLLECTION, nextNumber.toString()),
         newQueueItem
       );
+
+      // Incrementar el número actual en Firebase
+      await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
+        number: nextNumber + 1
+      });
       
-      // Si es el primer usuario y coincide con el número actual
-      if (queue.length === 0 && nextNumber === currentNumber) {
+      // Si es el primer usuario
+      if (queue.length === 0) {
         toast({
           title: "¡Es tu turno!",
           description: "Puedes usar el microondas ahora.",
@@ -137,40 +161,86 @@ const Index = () => {
       setUserName("");
     } catch (error) {
       console.error("Error al unirse a la cola:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo unir a la cola. Inténtalo de nuevo.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleConfirm = async () => {
-    if (userNumber === currentNumber) {
-      try {
-        await deleteDoc(doc(db, QUEUE_COLLECTION, currentNumber.toString()));
-        
-        await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
-          number: currentNumber + 1
-        });
+    if (!userNumber) {
+      toast({
+        title: "Error",
+        description: "No tienes un turno asignado",
+        variant: "destructive"
+      });
+      return;
+    }
 
-        setUserNumber(null);
-      } catch (error) {
-        console.error("Error al confirmar turno:", error);
-      }
+    if (userNumber !== currentNumber) {
+      toast({
+        title: "Error",
+        description: "No es tu turno todavía",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, QUEUE_COLLECTION, userNumber.toString()));
+      setUserNumber(null);
+      
+      toast({
+        title: "¡Gracias!",
+        description: "Has confirmado tu turno.",
+      });
+    } catch (error) {
+      console.error("Error al confirmar turno:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo confirmar el turno. Inténtalo de nuevo.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleCancel = async () => {
-    if (userNumber) {
-      try {
-        await deleteDoc(doc(db, QUEUE_COLLECTION, userNumber.toString()));
-        
-        if (userNumber === currentNumber) {
+    if (!userNumber) {
+      toast({
+        title: "Error",
+        description: "No tienes un turno asignado",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, QUEUE_COLLECTION, userNumber.toString()));
+      
+      // Si era el turno actual, incrementar el número
+      if (userNumber === currentNumber) {
+        const currentNumberDoc = await getDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC));
+        if (currentNumberDoc.exists()) {
           await setDoc(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), {
-            number: currentNumber + 1
+            number: currentNumberDoc.data().number + 1
           });
         }
-        
-        setUserNumber(null);
-      } catch (error) {
-        console.error("Error al cancelar turno:", error);
       }
+      
+      setUserNumber(null);
+      toast({
+        title: "Turno cancelado",
+        description: "Has salido de la cola correctamente.",
+      });
+    } catch (error) {
+      console.error("Error al cancelar turno:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo cancelar el turno. Inténtalo de nuevo.",
+        variant: "destructive"
+      });
     }
   };
 
