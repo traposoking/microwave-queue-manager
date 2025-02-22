@@ -97,6 +97,15 @@ const Index = () => {
       return;
     }
 
+    if (userNumber) {
+      toast({
+        title: "Error",
+        description: "Ya tienes un turno asignado",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const nextNumber = queue.length > 0 ? Math.max(...queue.map(item => item.number)) + 1 : currentNumber;
       const newQueueItem: QueueItem = {
@@ -110,6 +119,19 @@ const Index = () => {
         doc(db, QUEUE_COLLECTION, nextNumber.toString()),
         newQueueItem
       );
+      
+      // Si es el primer usuario y coincide con el número actual
+      if (queue.length === 0 && nextNumber === currentNumber) {
+        toast({
+          title: "¡Es tu turno!",
+          description: "Puedes usar el microondas ahora.",
+        });
+      } else {
+        toast({
+          title: "¡Te has unido a la cola!",
+          description: `Tu número es: ${nextNumber}`,
+        });
+      }
       
       setUserNumber(nextNumber);
       setUserName("");
