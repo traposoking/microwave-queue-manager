@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { QueueStatus } from "@/components/QueueStatus";
 import { QueueActions } from "@/components/QueueActions";
@@ -37,22 +38,30 @@ const Index = () => {
   const [userName, setUserName] = useState("");
   const { toast } = useToast();
 
+  // Efecto para escuchar cambios en la cola
   useEffect(() => {
     const q = query(collection(db, QUEUE_COLLECTION), orderBy('timestamp'));
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const queueItems = snapshot.docs.map(doc => {
-        const data = doc.data() as QueueItem;
-        return data;
-      });
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const queueItems = snapshot.docs
+        .filter(doc => doc.id !== CURRENT_NUMBER_DOC) // Excluir el documento de control
+        .map(doc => {
+          const data = doc.data() as QueueItem;
+          return data;
+        });
       setQueue(queueItems);
     });
 
     return () => unsubscribe();
   }, []);
 
+  // Efecto para escuchar cambios en el número actual
   useEffect(() => {
-    const unsubscribe = onSnapshot(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), (doc) => {
-      if (doc.exists()) {
+    const unsubscribe = onSnapshot(doc(db, QUEUE_COLLECTION, CURRENT_NUMBER_DOC), async (doc) => {
+      if (!doc.exists()) {
+        // Si el documento no existe, lo creamos con el valor inicial
+        await setDoc(doc.ref, { number: 1 });
+        setCurrentNumber(1);
+      } else {
         setCurrentNumber(doc.data().number);
       }
     });
